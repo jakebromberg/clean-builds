@@ -1,6 +1,8 @@
 use std::io::{BufRead, Write};
 use std::path::Path;
 
+use rayon::prelude::*;
+
 use crate::scanner::Artifact;
 use crate::size::format_size;
 
@@ -16,7 +18,7 @@ pub enum DeleteError {
     Io(#[from] std::io::Error),
 }
 
-/// Prompt the user for confirmation and delete artifacts if confirmed.
+/// Prompt the user for confirmation and delete artifacts in parallel if confirmed.
 /// Returns the number of artifacts deleted, or 0 if the user declined.
 pub fn confirm_and_delete(
     out: &mut dyn Write,
@@ -44,17 +46,17 @@ pub fn confirm_and_delete(
         }
     }
 
+    let results: Vec<Result<(), DeleteError>> = artifacts
+        .par_iter()
+        .map(|artifact| delete_artifact(&artifact.path))
+        .collect();
+
     let mut deleted = 0;
     let mut errors = Vec::new();
-
-    for artifact in artifacts {
-        match delete_artifact(&artifact.path) {
-            Ok(()) => {
-                deleted += 1;
-            }
-            Err(e) => {
-                errors.push(e);
-            }
+    for result in results {
+        match result {
+            Ok(()) => deleted += 1,
+            Err(e) => errors.push(e),
         }
     }
 
