@@ -24,8 +24,12 @@ pub struct Cli {
     #[arg(short, long)]
     pub verbose: bool,
 
-    /// Exclude directories from scanning (repeatable)
-    #[arg(long, value_name = "DIR")]
+    /// Include only artifacts matching glob pattern (repeatable)
+    #[arg(long, value_name = "PATTERN")]
+    pub include: Vec<String>,
+
+    /// Exclude artifacts matching glob pattern (repeatable)
+    #[arg(long, value_name = "PATTERN")]
     pub exclude: Vec<String>,
 }
 
@@ -40,6 +44,7 @@ mod tests {
         assert!(!cli.delete);
         assert!(!cli.yes);
         assert!(!cli.verbose);
+        assert!(cli.include.is_empty());
         assert!(cli.exclude.is_empty());
     }
 
@@ -50,17 +55,35 @@ mod tests {
             "--delete",
             "-y",
             "-v",
+            "--include",
+            "node_modules",
+            "--include",
+            "target",
             "--exclude",
-            "vendor",
+            "vendor*",
             "--exclude",
-            ".git",
+            "old-*",
             "/tmp/projects",
         ]);
         assert_eq!(cli.path, PathBuf::from("/tmp/projects"));
         assert!(cli.delete);
         assert!(cli.yes);
         assert!(cli.verbose);
-        assert_eq!(cli.exclude, vec!["vendor", ".git"]);
+        assert_eq!(cli.include, vec!["node_modules", "target"]);
+        assert_eq!(cli.exclude, vec!["vendor*", "old-*"]);
+    }
+
+    #[test]
+    fn include_flag() {
+        let cli = Cli::parse_from([
+            "clean-builds",
+            "--include",
+            "node_modules",
+            "--include",
+            "target",
+        ]);
+        assert_eq!(cli.include, vec!["node_modules", "target"]);
+        assert!(cli.exclude.is_empty());
     }
 
     #[test]
