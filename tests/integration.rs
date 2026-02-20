@@ -97,17 +97,101 @@ fn multiple_build_systems() {
 }
 
 #[test]
-fn exclude_directory() {
+fn exclude_by_glob_pattern() {
     let tmp = TempDir::new().unwrap();
     set_up_rust_project(&tmp);
 
     cmd()
         .arg(tmp.path())
         .arg("--exclude")
-        .arg("my-rust-app")
+        .arg("my-rust*")
         .assert()
         .success()
         .stdout(predicate::str::contains("No build artifacts found."));
+}
+
+#[test]
+fn include_only_matching_artifacts() {
+    let tmp = TempDir::new().unwrap();
+    set_up_rust_project(&tmp);
+    set_up_node_project(&tmp);
+
+    cmd()
+        .arg(tmp.path())
+        .arg("--include")
+        .arg("node_modules")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Node.js"))
+        .stdout(predicate::str::contains("Rust/Cargo").not());
+}
+
+#[test]
+fn include_and_exclude_combined() {
+    let tmp = TempDir::new().unwrap();
+    set_up_rust_project(&tmp);
+    set_up_node_project(&tmp);
+
+    // Include both, but exclude the node one by project dir prefix
+    cmd()
+        .arg(tmp.path())
+        .arg("--include")
+        .arg("target")
+        .arg("--include")
+        .arg("node_modules")
+        .arg("--exclude")
+        .arg("my-node*")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Rust/Cargo"))
+        .stdout(predicate::str::contains("Node.js").not());
+}
+
+#[test]
+fn multiple_include_patterns() {
+    let tmp = TempDir::new().unwrap();
+    set_up_rust_project(&tmp);
+    set_up_node_project(&tmp);
+
+    cmd()
+        .arg(tmp.path())
+        .arg("--include")
+        .arg("node_modules")
+        .arg("--include")
+        .arg("target")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Node.js"))
+        .stdout(predicate::str::contains("Rust/Cargo"));
+}
+
+#[test]
+fn exclude_by_directory_name_prefix() {
+    let tmp = TempDir::new().unwrap();
+    set_up_rust_project(&tmp);
+    set_up_node_project(&tmp);
+
+    // Exclude projects starting with "my-"
+    cmd()
+        .arg(tmp.path())
+        .arg("--exclude")
+        .arg("my-*")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("No build artifacts found."));
+}
+
+#[test]
+fn invalid_pattern_exits_with_error() {
+    let tmp = TempDir::new().unwrap();
+
+    cmd()
+        .arg(tmp.path())
+        .arg("--exclude")
+        .arg("[invalid")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("Error"));
 }
 
 #[test]

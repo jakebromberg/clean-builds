@@ -1,4 +1,3 @@
-use std::collections::HashSet;
 use std::io;
 use std::process;
 
@@ -6,6 +5,7 @@ use clap::Parser;
 
 use clean_builds::cli::Cli;
 use clean_builds::delete::confirm_and_delete;
+use clean_builds::filter::ArtifactFilter;
 use clean_builds::output::{print_dry_run_footer, print_summary};
 use clean_builds::scanner::scan;
 use clean_builds::size::compute_sizes;
@@ -21,9 +21,16 @@ fn main() {
         }
     };
 
-    let excludes: HashSet<String> = cli.exclude.into_iter().collect();
+    let filter = match ArtifactFilter::new(&cli.include, &cli.exclude) {
+        Ok(f) => f,
+        Err(e) => {
+            eprintln!("Error: {e}");
+            process::exit(1);
+        }
+    };
 
-    let mut artifacts = scan(&root, &excludes);
+    let mut artifacts = scan(&root);
+    artifacts = filter.apply(&root, artifacts);
 
     if artifacts.is_empty() {
         println!("No build artifacts found.");

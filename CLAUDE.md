@@ -6,6 +6,7 @@ build-system marker files to avoid false positives, then optionally deletes them
 ## Architecture
 
 - `cli.rs` - clap derive CLI definitions
+- `filter.rs` - Glob-pattern-based include/exclude filtering
 - `rules.rs` - Declarative artifact rule registry
 - `scanner.rs` - Recursive traversal and artifact detection
 - `size.rs` - Parallel directory size computation

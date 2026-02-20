@@ -19,11 +19,12 @@ Arguments:
   [PATH]  Root directory to scan (default: current directory)
 
 Options:
-  --delete          Actually delete artifacts (default is dry-run)
-  -y, --yes         Skip confirmation prompt (use with --delete)
-  -v, --verbose     Show individual artifact paths
-  --exclude <DIR>   Exclude directories from scanning (repeatable)
-  -h, --help        Help
+  --delete              Actually delete artifacts (default is dry-run)
+  -y, --yes             Skip confirmation prompt (use with --delete)
+  -v, --verbose         Show individual artifact paths
+  --include <PATTERN>   Include only artifacts matching glob pattern (repeatable)
+  --exclude <PATTERN>   Exclude artifacts matching glob pattern (repeatable)
+  -h, --help            Help
 ```
 
 ### Dry-run (default)
@@ -59,6 +60,34 @@ Shows the same summary, then prompts for confirmation before deleting.
 ```sh
 clean-builds ~/Developer --delete --yes
 ```
+
+### Filtering with `--include` and `--exclude`
+
+Only clean `node_modules` directories:
+
+```sh
+clean-builds ~/Developer --include 'node_modules'
+```
+
+Skip projects whose directory name starts with `wxyc`:
+
+```sh
+clean-builds ~/Developer --exclude 'wxyc*'
+```
+
+Combine both -- clean only `target` dirs, but skip a specific project:
+
+```sh
+clean-builds ~/Developer --include 'target' --exclude 'old-project*'
+```
+
+Patterns without `/` are automatically matched as path components anywhere in the
+relative path. A bare pattern like `wxyc*` matches both leaf names
+(`wxyc-app/node_modules` via the ancestor dir) and artifact names directly. Patterns
+containing `/` are used as-is for explicit path control (e.g., `apps/*/target`).
+
+Exclude takes precedence over include. If no `--include` is specified, all artifacts
+are included. Both flags are repeatable.
 
 ### Verbose mode
 
