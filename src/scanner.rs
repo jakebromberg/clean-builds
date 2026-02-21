@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 
-use walkdir::WalkDir;
+use jwalk::WalkDir;
 
 use crate::rules::{MatchableRule, all_rules, has_marker, matches_dir};
 
@@ -14,60 +15,51 @@ pub struct Artifact {
     pub size_bytes: u64,
 }
 
-/// Scan `root` for build artifacts, skipping `.git` directories.
+/// Scan `root` for build artifacts using parallel directory traversal.
+///
+/// Uses jwalk's `process_read_dir` callback to match artifacts inline during
+/// traversal and prune matched directories so their children are never visited.
 pub fn scan(root: &Path) -> Vec<Artifact> {
     let rules = all_rules();
-    let mut artifacts = Vec::new();
-    // Track paths we've already recorded as artifacts so we don't descend into them.
-    let mut pruned: Vec<PathBuf> = Vec::new();
+    let artifacts = Arc::new(Mutex::new(Vec::new()));
+    let artifacts_ref = Arc::clone(&artifacts);
 
     let walker = WalkDir::new(root)
         .follow_links(false)
-        .into_iter()
-        .filter_entry(|entry| {
-            // Only filter directories.
-            if !entry.file_type().is_dir() {
-                return true;
-            }
-            let name = entry.file_name().to_string_lossy();
+        .skip_hidden(false)
+        .process_read_dir(move |_depth, _path, _read_dir_state, children| {
+            for entry_result in children.iter_mut() {
+                let Ok(entry) = entry_result.as_mut() else {
+                    continue;
+                };
 
-            // Always skip .git
-            if name == ".git" {
-                return false;
-            }
+                if !entry.file_type.is_dir() {
+                    continue;
+                }
 
-            true
+                let name = entry.file_name.to_string_lossy();
+                if name == ".git" {
+                    entry.read_children_path = None;
+                    continue;
+                }
+
+                let path = entry.parent_path.join(&entry.file_name);
+                let dir_name = match path.file_name().and_then(|n| n.to_str()) {
+                    Some(n) => n,
+                    None => continue,
+                };
+
+                if let Some(artifact) = try_match(&path, dir_name, &rules) {
+                    artifacts_ref.lock().unwrap().push(artifact);
+                    entry.read_children_path = None;
+                }
+            }
         });
 
-    for entry in walker {
-        let entry = match entry {
-            Ok(e) => e,
-            Err(_) => continue,
-        };
+    for _ in walker {}
 
-        if !entry.file_type().is_dir() {
-            continue;
-        }
-
-        let path = entry.path();
-
-        // If this path is under an already-pruned artifact, skip it.
-        if pruned.iter().any(|p| path.starts_with(p)) {
-            continue;
-        }
-
-        let dir_name = match path.file_name().and_then(|n| n.to_str()) {
-            Some(n) => n,
-            None => continue,
-        };
-
-        if let Some(artifact) = try_match(path, dir_name, &rules) {
-            pruned.push(path.to_path_buf());
-            artifacts.push(artifact);
-        }
-    }
-
-    artifacts
+    let mut result = artifacts.lock().unwrap();
+    std::mem::take(&mut *result)
 }
 
 /// Try to match a directory against all rules. Returns the first match.

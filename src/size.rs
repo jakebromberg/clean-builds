@@ -1,7 +1,7 @@
 use std::path::Path;
 
+use jwalk::WalkDir;
 use rayon::prelude::*;
-use walkdir::WalkDir;
 
 use crate::scanner::Artifact;
 
@@ -18,6 +18,7 @@ pub fn compute_sizes(artifacts: &mut [Artifact]) {
 fn dir_size(path: &Path) -> u64 {
     WalkDir::new(path)
         .follow_links(false)
+        .skip_hidden(false)
         .into_iter()
         .filter_map(|e| e.ok())
         .filter(|e| e.file_type().is_file())
