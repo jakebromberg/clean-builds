@@ -8,11 +8,17 @@ use crate::scanner::Artifact;
 
 /// Compute directory sizes for all artifacts in parallel.
 pub fn compute_sizes(artifacts: &mut [Artifact]) {
-    let sizes: Vec<u64> = artifacts.par_iter().map(|a| dir_size(&a.path)).collect();
+    let sizes: Vec<u64> = artifacts
+        .par_iter()
+        .map(|a| {
+            let size = dir_size(&a.path);
+            debug!("{}: {}", a.path.display(), format_size(size));
+            size
+        })
+        .collect();
 
     for (artifact, size) in artifacts.iter_mut().zip(sizes) {
         artifact.size_bytes = size;
-        debug!("{}: {}", artifact.path.display(), format_size(size));
     }
 }
 
