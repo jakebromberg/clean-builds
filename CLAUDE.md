@@ -19,4 +19,5 @@ build-system marker files to avoid false positives, then optionally deletes them
 - Output functions take `&mut dyn Write` for testability
 - `thiserror` for error types
 - `clap` derive for CLI
+- `log` facade for diagnostics (`info!` for pipeline stages, `debug!` for granular detail, `warn!` for recoverable errors); `env_logger` backend initialized in `main.rs`
 - Integration tests use `tempfile` + `assert_cmd`

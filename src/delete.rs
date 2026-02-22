@@ -1,6 +1,7 @@
 use std::io::{BufRead, Write};
 use std::path::Path;
 
+use log::{debug, info, warn};
 use rayon::prelude::*;
 
 use crate::scanner::Artifact;
@@ -46,9 +47,13 @@ pub fn confirm_and_delete(
         }
     }
 
+    info!("Deleting {} artifact directories", artifacts.len());
     let results: Vec<Result<(), DeleteError>> = artifacts
         .par_iter()
-        .map(|artifact| delete_artifact(&artifact.path))
+        .map(|artifact| {
+            debug!("Deleting {}", artifact.path.display());
+            delete_artifact(&artifact.path)
+        })
         .collect();
 
     let mut deleted = 0;
@@ -56,7 +61,10 @@ pub fn confirm_and_delete(
     for result in results {
         match result {
             Ok(()) => deleted += 1,
-            Err(e) => errors.push(e),
+            Err(e) => {
+                warn!("{e}");
+                errors.push(e);
+            }
         }
     }
 

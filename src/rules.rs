@@ -1,5 +1,7 @@
 use std::path::Path;
 
+use log::warn;
+
 /// Describes a build artifact directory and how to identify it.
 #[derive(Debug, Clone)]
 pub struct ArtifactRule {
@@ -210,6 +212,7 @@ pub fn has_marker(parent: &Path, marker: &MarkerKind) -> bool {
         MarkerKind::Files(names) => names.iter().any(|name| parent.join(name).exists()),
         MarkerKind::GlobSuffix(suffix) => {
             let Ok(entries) = std::fs::read_dir(parent) else {
+                warn!("Cannot read directory: {}", parent.display());
                 return false;
             };
             entries.filter_map(|e| e.ok()).any(|e| {

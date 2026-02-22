@@ -1,6 +1,7 @@
 use std::path::Path;
 
 use jwalk::WalkDir;
+use log::debug;
 use rayon::prelude::*;
 
 use crate::scanner::Artifact;
@@ -11,6 +12,7 @@ pub fn compute_sizes(artifacts: &mut [Artifact]) {
 
     for (artifact, size) in artifacts.iter_mut().zip(sizes) {
         artifact.size_bytes = size;
+        debug!("{}: {}", artifact.path.display(), format_size(size));
     }
 }
 

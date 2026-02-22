@@ -256,3 +256,40 @@ fn pycache_detected_without_marker() {
         .success()
         .stdout(predicate::str::contains("Python"));
 }
+
+#[test]
+fn verbose_shows_debug_log_on_stderr() {
+    let tmp = TempDir::new().unwrap();
+    set_up_rust_project(&tmp);
+
+    cmd()
+        .arg(tmp.path())
+        .arg("--verbose")
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("Found artifact"));
+}
+
+#[test]
+fn default_shows_info_log_on_stderr() {
+    let tmp = TempDir::new().unwrap();
+    set_up_rust_project(&tmp);
+
+    cmd()
+        .arg(tmp.path())
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("Scanning"));
+}
+
+#[test]
+fn default_does_not_show_debug_log() {
+    let tmp = TempDir::new().unwrap();
+    set_up_rust_project(&tmp);
+
+    cmd()
+        .arg(tmp.path())
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("Found artifact").not());
+}

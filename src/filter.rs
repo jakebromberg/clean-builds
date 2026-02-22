@@ -1,6 +1,7 @@
 use std::path::Path;
 
 use globset::{Glob, GlobSet, GlobSetBuilder};
+use log::debug;
 
 use crate::scanner::Artifact;
 
@@ -63,13 +64,23 @@ impl ArtifactFilter {
 
     /// Filter a list of artifacts, matching their paths relative to `root`.
     pub fn apply(&self, root: &Path, artifacts: Vec<Artifact>) -> Vec<Artifact> {
-        artifacts
+        let before = artifacts.len();
+        let filtered: Vec<Artifact> = artifacts
             .into_iter()
             .filter(|a| {
                 let rel = a.path.strip_prefix(root).unwrap_or(&a.path);
-                self.matches(rel)
+                let matched = self.matches(rel);
+                if !matched {
+                    debug!("Filtered out: {}", rel.display());
+                }
+                matched
             })
-            .collect()
+            .collect();
+        let removed = before - filtered.len();
+        if removed > 0 {
+            debug!("Filter: {} -> {} artifacts ({} removed)", before, filtered.len(), removed);
+        }
+        filtered
     }
 }
 

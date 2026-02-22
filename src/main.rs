@@ -2,6 +2,7 @@ use std::io;
 use std::process;
 
 use clap::Parser;
+use log::info;
 
 use clean_builds::cli::Cli;
 use clean_builds::delete::confirm_and_delete;
@@ -12,6 +13,16 @@ use clean_builds::size::compute_sizes;
 
 fn main() {
     let cli = Cli::parse();
+
+    env_logger::Builder::new()
+        .filter_level(if cli.verbose {
+            log::LevelFilter::Debug
+        } else {
+            log::LevelFilter::Info
+        })
+        .format_timestamp(None)
+        .format_target(false)
+        .init();
 
     let root = match cli.path.canonicalize() {
         Ok(p) => p,
@@ -29,7 +40,10 @@ fn main() {
         }
     };
 
+    info!("Scanning {}", root.display());
     let mut artifacts = scan(&root);
+
+    info!("Filtering artifacts");
     artifacts = filter.apply(&root, artifacts);
 
     if artifacts.is_empty() {
@@ -37,6 +51,7 @@ fn main() {
         return;
     }
 
+    info!("Computing sizes for {} artifacts", artifacts.len());
     compute_sizes(&mut artifacts);
 
     let stdout = io::stdout();

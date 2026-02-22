@@ -95,7 +95,9 @@ are included. Both flags are repeatable.
 clean-builds ~/Developer --verbose
 ```
 
-Shows individual artifact paths and sizes under each build system group.
+Shows individual artifact paths and sizes under each build system group, plus
+detailed diagnostic logging on stderr (artifact matches, filter decisions, per-artifact
+sizes). Without `--verbose`, only pipeline stage progress is logged to stderr.
 
 ## Supported Build Systems
 
