@@ -78,7 +78,12 @@ impl ArtifactFilter {
             .collect();
         let removed = before - filtered.len();
         if removed > 0 {
-            debug!("Filter: {} -> {} artifacts ({} removed)", before, filtered.len(), removed);
+            debug!(
+                "Filter: {} -> {} artifacts ({} removed)",
+                before,
+                filtered.len(),
+                removed
+            );
         }
         filtered
     }

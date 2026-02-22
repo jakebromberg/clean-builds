@@ -43,7 +43,10 @@ pub fn scan(root: &Path) -> Vec<Artifact> {
 
                 let name = entry.file_name.to_string_lossy();
                 if name == ".git" {
-                    debug!("Skipping .git directory: {}", entry.parent_path.join(&entry.file_name).display());
+                    debug!(
+                        "Skipping .git directory: {}",
+                        entry.parent_path.join(&entry.file_name).display()
+                    );
                     entry.read_children_path = None;
                     continue;
                 }
@@ -55,7 +58,11 @@ pub fn scan(root: &Path) -> Vec<Artifact> {
                 };
 
                 if let Some(artifact) = try_match(&path, dir_name, &rules) {
-                    debug!("Found artifact: {} ({})", artifact.path.display(), artifact.build_system);
+                    debug!(
+                        "Found artifact: {} ({})",
+                        artifact.path.display(),
+                        artifact.build_system
+                    );
                     artifacts_ref.lock().unwrap().push(artifact);
                     entry.read_children_path = None;
                 }
