@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use jwalk::WalkDir;
+use log::{debug, warn};
 
 use crate::rules::{MatchableRule, all_rules, has_marker, matches_dir};
 
@@ -30,6 +31,9 @@ pub fn scan(root: &Path) -> Vec<Artifact> {
         .process_read_dir(move |_depth, _path, _read_dir_state, children| {
             for entry_result in children.iter_mut() {
                 let Ok(entry) = entry_result.as_mut() else {
+                    if let Err(e) = entry_result {
+                        warn!("Failed to read directory entry: {e}");
+                    }
                     continue;
                 };
 
@@ -39,6 +43,7 @@ pub fn scan(root: &Path) -> Vec<Artifact> {
 
                 let name = entry.file_name.to_string_lossy();
                 if name == ".git" {
+                    debug!("Skipping .git directory: {}", entry.parent_path.join(&entry.file_name).display());
                     entry.read_children_path = None;
                     continue;
                 }
@@ -50,6 +55,7 @@ pub fn scan(root: &Path) -> Vec<Artifact> {
                 };
 
                 if let Some(artifact) = try_match(&path, dir_name, &rules) {
+                    debug!("Found artifact: {} ({})", artifact.path.display(), artifact.build_system);
                     artifacts_ref.lock().unwrap().push(artifact);
                     entry.read_children_path = None;
                 }
@@ -59,7 +65,9 @@ pub fn scan(root: &Path) -> Vec<Artifact> {
     for _ in walker {}
 
     let mut result = artifacts.lock().unwrap();
-    std::mem::take(&mut *result)
+    let artifacts = std::mem::take(&mut *result);
+    debug!("Scan complete: found {} artifacts", artifacts.len());
+    artifacts
 }
 
 /// Try to match a directory against all rules. Returns the first match.
