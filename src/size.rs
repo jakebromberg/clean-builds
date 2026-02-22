@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use jwalk::WalkDir;
+use jwalk::{Parallelism, WalkDir};
 use log::debug;
 use rayon::prelude::*;
 
@@ -23,8 +23,13 @@ pub fn compute_sizes(artifacts: &mut [Artifact]) {
 }
 
 /// Calculate the total size of a directory tree.
+///
+/// Uses serial walking to avoid contention with the outer rayon `par_iter`
+/// that drives `compute_sizes`. Both share rayon's global thread pool, and
+/// nested parallel walks deadlock when the pool is saturated.
 fn dir_size(path: &Path) -> u64 {
     WalkDir::new(path)
+        .parallelism(Parallelism::Serial)
         .follow_links(false)
         .skip_hidden(false)
         .into_iter()
@@ -102,5 +107,48 @@ mod tests {
 
         compute_sizes(&mut artifacts);
         assert_eq!(artifacts[0].size_bytes, 11);
+    }
+
+    /// Reproduces thread-pool contention between rayon par_iter and jwalk.
+    /// With enough artifacts saturating the rayon global pool, jwalk's
+    /// internal parallel walkers can't make progress and return 0.
+    #[test]
+    fn compute_sizes_many_artifacts_no_zeros() {
+        use std::fs;
+        use tempfile::TempDir;
+
+        let tmp = TempDir::new().unwrap();
+        let num_threads = rayon::current_num_threads();
+        // Create more artifacts than rayon threads to trigger contention.
+        let count = num_threads * 4;
+
+        let mut artifacts: Vec<Artifact> = (0..count)
+            .map(|i| {
+                let dir = tmp.path().join(format!("project-{i}/node_modules"));
+                fs::create_dir_all(&dir).unwrap();
+                fs::write(dir.join("file.js"), "content").unwrap();
+                Artifact {
+                    path: dir,
+                    build_system: "Node.js",
+                    artifact_dir: "node_modules",
+                    size_bytes: 0,
+                }
+            })
+            .collect();
+
+        compute_sizes(&mut artifacts);
+
+        let zeros: Vec<_> = artifacts
+            .iter()
+            .filter(|a| a.size_bytes == 0)
+            .map(|a| a.path.display().to_string())
+            .collect();
+        assert!(
+            zeros.is_empty(),
+            "{} of {} artifacts reported 0 bytes: {:?}",
+            zeros.len(),
+            count,
+            &zeros[..zeros.len().min(5)]
+        );
     }
 }
