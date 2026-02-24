@@ -109,24 +109,14 @@ mod tests {
 
     #[test]
     fn system_flag() {
-        let cli = Cli::parse_from([
-            "clean-builds",
-            "--system",
-            "cargo",
-            "--system",
-            "node",
-        ]);
+        let cli = Cli::parse_from(["clean-builds", "--system", "cargo", "--system", "node"]);
         assert_eq!(cli.system, vec!["cargo", "node"]);
         assert!(cli.exclude_system.is_empty());
     }
 
     #[test]
     fn exclude_system_flag() {
-        let cli = Cli::parse_from([
-            "clean-builds",
-            "--exclude-system",
-            "python",
-        ]);
+        let cli = Cli::parse_from(["clean-builds", "--exclude-system", "python"]);
         assert!(cli.system.is_empty());
         assert_eq!(cli.exclude_system, vec!["python"]);
     }
