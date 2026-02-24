@@ -112,7 +112,12 @@ pub fn print_summary(
 /// Print the table of available build system IDs.
 pub fn print_systems(out: &mut dyn Write) -> std::io::Result<()> {
     let systems = crate::rules::system_ids();
-    let id_width = systems.iter().map(|(id, _)| id.len()).max().unwrap_or(2).max(2);
+    let id_width = systems
+        .iter()
+        .map(|(id, _)| id.len())
+        .max()
+        .unwrap_or(2)
+        .max(2);
     let name_width = systems
         .iter()
         .map(|(_, name)| name.len())

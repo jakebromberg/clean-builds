@@ -372,8 +372,23 @@ mod tests {
     fn system_ids_covers_all_systems() {
         let ids = system_ids();
         let expected = [
-            "bundler", "cabal", "cargo", "cmake", "cocoapods", "composer", "dotnet", "flutter",
-            "gradle", "maven", "mix", "node", "python", "sbt", "spm", "stack", "zig",
+            "bundler",
+            "cabal",
+            "cargo",
+            "cmake",
+            "cocoapods",
+            "composer",
+            "dotnet",
+            "flutter",
+            "gradle",
+            "maven",
+            "mix",
+            "node",
+            "python",
+            "sbt",
+            "spm",
+            "stack",
+            "zig",
         ];
         let actual: Vec<&str> = ids.iter().map(|(id, _)| *id).collect();
         for id in &expected {
@@ -385,8 +400,7 @@ mod tests {
     #[test]
     fn filter_include_keeps_matching() {
         let rules = all_rules();
-        let filtered =
-            filter_rules_by_system(rules, &["cargo".to_string()], &[]).unwrap();
+        let filtered = filter_rules_by_system(rules, &["cargo".to_string()], &[]).unwrap();
         assert!(!filtered.is_empty());
         for r in &filtered {
             assert_eq!(r.rule.id, "cargo");
@@ -397,8 +411,7 @@ mod tests {
     fn filter_exclude_removes_matching() {
         let rules = all_rules();
         let total = rules.len();
-        let filtered =
-            filter_rules_by_system(rules, &[], &["python".to_string()]).unwrap();
+        let filtered = filter_rules_by_system(rules, &[], &["python".to_string()]).unwrap();
         assert!(filtered.len() < total);
         for r in &filtered {
             assert_ne!(r.rule.id, "python");
@@ -416,8 +429,7 @@ mod tests {
     #[test]
     fn filter_unknown_id_errors() {
         let rules = all_rules();
-        let result =
-            filter_rules_by_system(rules, &["nonexistent".to_string()], &[]);
+        let result = filter_rules_by_system(rules, &["nonexistent".to_string()], &[]);
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(err.to_string().contains("nonexistent"));
@@ -427,8 +439,7 @@ mod tests {
     #[test]
     fn filter_case_insensitive() {
         let rules = all_rules();
-        let filtered =
-            filter_rules_by_system(rules, &["CARGO".to_string()], &[]).unwrap();
+        let filtered = filter_rules_by_system(rules, &["CARGO".to_string()], &[]).unwrap();
         assert!(!filtered.is_empty());
         for r in &filtered {
             assert_eq!(r.rule.id, "cargo");
@@ -438,12 +449,8 @@ mod tests {
     #[test]
     fn filter_multiple_include() {
         let rules = all_rules();
-        let filtered = filter_rules_by_system(
-            rules,
-            &["cargo".to_string(), "node".to_string()],
-            &[],
-        )
-        .unwrap();
+        let filtered =
+            filter_rules_by_system(rules, &["cargo".to_string(), "node".to_string()], &[]).unwrap();
         let ids: HashSet<&str> = filtered.iter().map(|r| r.rule.id).collect();
         assert_eq!(ids.len(), 2);
         assert!(ids.contains("cargo"));
