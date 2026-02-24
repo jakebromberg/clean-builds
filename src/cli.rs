@@ -31,6 +31,18 @@ pub struct Cli {
     /// Exclude artifacts matching glob pattern (repeatable)
     #[arg(long, value_name = "PATTERN")]
     pub exclude: Vec<String>,
+
+    /// Include only these build systems (repeatable, see --list-systems)
+    #[arg(long, value_name = "ID", conflicts_with = "exclude_system")]
+    pub system: Vec<String>,
+
+    /// Exclude these build systems (repeatable, see --list-systems)
+    #[arg(long, value_name = "ID", conflicts_with = "system")]
+    pub exclude_system: Vec<String>,
+
+    /// List available build system IDs and exit
+    #[arg(long)]
+    pub list_systems: bool,
 }
 
 #[cfg(test)]
@@ -46,6 +58,9 @@ mod tests {
         assert!(!cli.verbose);
         assert!(cli.include.is_empty());
         assert!(cli.exclude.is_empty());
+        assert!(cli.system.is_empty());
+        assert!(cli.exclude_system.is_empty());
+        assert!(!cli.list_systems);
     }
 
     #[test]
@@ -90,5 +105,47 @@ mod tests {
     fn verbose_long_form() {
         let cli = Cli::parse_from(["clean-builds", "--verbose"]);
         assert!(cli.verbose);
+    }
+
+    #[test]
+    fn system_flag() {
+        let cli = Cli::parse_from([
+            "clean-builds",
+            "--system",
+            "cargo",
+            "--system",
+            "node",
+        ]);
+        assert_eq!(cli.system, vec!["cargo", "node"]);
+        assert!(cli.exclude_system.is_empty());
+    }
+
+    #[test]
+    fn exclude_system_flag() {
+        let cli = Cli::parse_from([
+            "clean-builds",
+            "--exclude-system",
+            "python",
+        ]);
+        assert!(cli.system.is_empty());
+        assert_eq!(cli.exclude_system, vec!["python"]);
+    }
+
+    #[test]
+    fn list_systems_flag() {
+        let cli = Cli::parse_from(["clean-builds", "--list-systems"]);
+        assert!(cli.list_systems);
+    }
+
+    #[test]
+    fn system_and_exclude_system_conflict() {
+        let result = Cli::try_parse_from([
+            "clean-builds",
+            "--system",
+            "cargo",
+            "--exclude-system",
+            "node",
+        ]);
+        assert!(result.is_err());
     }
 }

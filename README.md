@@ -24,6 +24,9 @@ Options:
   -v, --verbose         Show individual artifact paths
   --include <PATTERN>   Include only artifacts matching glob pattern (repeatable)
   --exclude <PATTERN>   Exclude artifacts matching glob pattern (repeatable)
+  --system <ID>         Include only these build systems (repeatable, see --list-systems)
+  --exclude-system <ID> Exclude these build systems (repeatable, see --list-systems)
+  --list-systems        List available build system IDs and exit
   -h, --help            Help
 ```
 
@@ -89,6 +92,43 @@ containing `/` are used as-is for explicit path control (e.g., `apps/*/target`).
 Exclude takes precedence over include. If no `--include` is specified, all artifacts
 are included. Both flags are repeatable.
 
+### Filtering by build system
+
+Filter by build system identity using `--system` and `--exclude-system`. These
+flags are mutually exclusive. Use `--list-systems` to see available IDs.
+
+Only clean Node.js artifacts:
+
+```sh
+clean-builds ~/Developer --system node
+```
+
+Clean everything except Python:
+
+```sh
+clean-builds ~/Developer --exclude-system python
+```
+
+Multiple systems can be specified:
+
+```sh
+clean-builds ~/Developer --system cargo --system node
+```
+
+Combine with glob filters for fine-grained control:
+
+```sh
+clean-builds ~/Developer --system node --exclude 'legacy-*'
+```
+
+List available system IDs:
+
+```sh
+clean-builds --list-systems
+```
+
+System IDs are matched case-insensitively.
+
 ### Verbose mode
 
 ```sh
@@ -103,22 +143,22 @@ sizes). Without `--verbose`, only pipeline stage progress is logged to stderr.
 
 Each artifact directory is only matched when a marker file exists in its parent directory to prevent false positives.
 
-| Build System | Artifact Dirs | Marker Files |
-|---|---|---|
-| Java/Maven | `target/` | `pom.xml` |
-| Rust/Cargo | `target/` | `Cargo.toml` |
-| Scala/SBT | `target/` | `build.sbt` |
-| Node.js | `node_modules/`, `.next/`, `.nuxt/`, `.output/` | `package.json` |
-| Swift/SPM | `.build/` | `Package.swift` |
-| Python | `__pycache__/` (no marker), `.venv/`, `venv/`, `.mypy_cache/` (no marker), `.pytest_cache/` (no marker), `.tox/`, `*.egg-info/` | `pyproject.toml` or `setup.py` or `requirements.txt` (where noted) |
-| Android/Gradle | `build/`, `.gradle/` | `build.gradle` or `build.gradle.kts` |
-| C/C++/CMake | `build/`, `CMakeFiles/` | `CMakeLists.txt` |
-| .NET/C# | `bin/`, `obj/` | `*.csproj` or `*.sln` |
-| Elixir/Mix | `_build/`, `deps/` | `mix.exs` |
-| Haskell/Stack | `.stack-work/` | `stack.yaml` |
-| Haskell/Cabal | `dist-newstyle/` | `*.cabal` |
-| Dart/Flutter | `.dart_tool/`, `build/` | `pubspec.yaml` |
-| Zig | `zig-out/`, `zig-cache/` | `build.zig` |
-| PHP/Composer | `vendor/` | `composer.json` |
-| CocoaPods | `Pods/` | `Podfile` |
-| Ruby/Bundler | `vendor/bundle/` | `Gemfile` |
+| ID | Build System | Artifact Dirs | Marker Files |
+|---|---|---|---|
+| `bundler` | Ruby/Bundler | `vendor/bundle/` | `Gemfile` |
+| `cabal` | Haskell/Cabal | `dist-newstyle/` | `*.cabal` |
+| `cargo` | Rust/Cargo | `target/` | `Cargo.toml` |
+| `cmake` | C/C++/CMake | `build/`, `CMakeFiles/` | `CMakeLists.txt` |
+| `cocoapods` | CocoaPods | `Pods/` | `Podfile` |
+| `composer` | PHP/Composer | `vendor/` | `composer.json` |
+| `dotnet` | .NET/C# | `bin/`, `obj/` | `*.csproj` or `*.sln` |
+| `flutter` | Dart/Flutter | `.dart_tool/`, `build/` | `pubspec.yaml` |
+| `gradle` | Android/Gradle | `build/`, `.gradle/` | `build.gradle` or `build.gradle.kts` |
+| `maven` | Java/Maven | `target/` | `pom.xml` |
+| `mix` | Elixir/Mix | `_build/`, `deps/` | `mix.exs` |
+| `node` | Node.js | `node_modules/`, `.next/`, `.nuxt/`, `.output/` | `package.json` |
+| `python` | Python | `__pycache__/` (no marker), `.venv/`, `venv/`, `.mypy_cache/` (no marker), `.pytest_cache/` (no marker), `.tox/`, `*.egg-info/` | `pyproject.toml` or `setup.py` or `requirements.txt` (where noted) |
+| `sbt` | Scala/SBT | `target/` | `build.sbt` |
+| `spm` | Swift/SPM | `.build/` | `Package.swift` |
+| `stack` | Haskell/Stack | `.stack-work/` | `stack.yaml` |
+| `zig` | Zig | `zig-out/`, `zig-cache/` | `build.zig` |

@@ -7,7 +7,8 @@ use log::info;
 use clean_builds::cli::Cli;
 use clean_builds::delete::confirm_and_delete;
 use clean_builds::filter::ArtifactFilter;
-use clean_builds::output::{print_dry_run_footer, print_summary};
+use clean_builds::output::{print_dry_run_footer, print_summary, print_systems};
+use clean_builds::rules::{all_rules, filter_rules_by_system};
 use clean_builds::scanner::scan;
 use clean_builds::size::compute_sizes;
 
@@ -23,6 +24,24 @@ fn main() {
         .format_timestamp(None)
         .format_target(false)
         .init();
+
+    if cli.list_systems {
+        let stdout = io::stdout();
+        let mut out = stdout.lock();
+        if let Err(e) = print_systems(&mut out) {
+            eprintln!("Error writing output: {e}");
+            process::exit(1);
+        }
+        return;
+    }
+
+    let rules = match filter_rules_by_system(all_rules(), &cli.system, &cli.exclude_system) {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("Error: {e}");
+            process::exit(1);
+        }
+    };
 
     let root = match cli.path.canonicalize() {
         Ok(p) => p,
@@ -41,7 +60,7 @@ fn main() {
     };
 
     info!("Scanning {}", root.display());
-    let mut artifacts = scan(&root);
+    let mut artifacts = scan(&root, &rules);
 
     info!("Filtering artifacts");
     artifacts = filter.apply(&root, artifacts);

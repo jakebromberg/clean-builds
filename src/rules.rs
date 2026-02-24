@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use std::path::Path;
 
 use log::warn;
@@ -5,6 +6,8 @@ use log::warn;
 /// Describes a build artifact directory and how to identify it.
 #[derive(Debug, Clone)]
 pub struct ArtifactRule {
+    /// Short, CLI-friendly identifier for the build system (e.g., "cargo", "node").
+    pub id: &'static str,
     pub build_system: &'static str,
     pub artifact_dir: &'static str,
     pub marker: MarkerKind,
@@ -35,26 +38,35 @@ pub struct MatchableRule {
     pub dir_match: DirMatch,
 }
 
+/// Error from invalid system IDs in `--system` or `--exclude-system`.
+#[derive(thiserror::Error, Debug)]
+#[error("unknown build system: {id}\nValid systems: {valid}")]
+pub struct SystemFilterError {
+    id: String,
+    valid: String,
+}
+
 /// Returns the full set of artifact rules, ordered so that more specific markers
 /// come first (helps with disambiguation of `target/`, `build/`, etc.).
 pub fn all_rules() -> Vec<MatchableRule> {
     vec![
         // Java/Maven
-        mr("Java/Maven", "target", &["pom.xml"]),
+        mr("maven", "Java/Maven", "target", &["pom.xml"]),
         // Rust/Cargo
-        mr("Rust/Cargo", "target", &["Cargo.toml"]),
+        mr("cargo", "Rust/Cargo", "target", &["Cargo.toml"]),
         // Scala/SBT
-        mr("Scala/SBT", "target", &["build.sbt"]),
+        mr("sbt", "Scala/SBT", "target", &["build.sbt"]),
         // Node.js
-        mr("Node.js", "node_modules", &["package.json"]),
-        mr("Node.js", ".next", &["package.json"]),
-        mr("Node.js", ".nuxt", &["package.json"]),
-        mr("Node.js", ".output", &["package.json"]),
+        mr("node", "Node.js", "node_modules", &["package.json"]),
+        mr("node", "Node.js", ".next", &["package.json"]),
+        mr("node", "Node.js", ".nuxt", &["package.json"]),
+        mr("node", "Node.js", ".output", &["package.json"]),
         // Swift/SPM
-        mr("Swift/SPM", ".build", &["Package.swift"]),
+        mr("spm", "Swift/SPM", ".build", &["Package.swift"]),
         // Python -- no-marker variants
         MatchableRule {
             rule: ArtifactRule {
+                id: "python",
                 build_system: "Python",
                 artifact_dir: "__pycache__",
                 marker: MarkerKind::Always,
@@ -63,6 +75,7 @@ pub fn all_rules() -> Vec<MatchableRule> {
         },
         MatchableRule {
             rule: ArtifactRule {
+                id: "python",
                 build_system: "Python",
                 artifact_dir: ".mypy_cache",
                 marker: MarkerKind::Always,
@@ -71,6 +84,7 @@ pub fn all_rules() -> Vec<MatchableRule> {
         },
         MatchableRule {
             rule: ArtifactRule {
+                id: "python",
                 build_system: "Python",
                 artifact_dir: ".pytest_cache",
                 marker: MarkerKind::Always,
@@ -79,16 +93,19 @@ pub fn all_rules() -> Vec<MatchableRule> {
         },
         // Python -- marker variants
         mr_multi(
+            "python",
             "Python",
             ".venv",
             &["pyproject.toml", "setup.py", "requirements.txt"],
         ),
         mr_multi(
+            "python",
             "Python",
             "venv",
             &["pyproject.toml", "setup.py", "requirements.txt"],
         ),
         mr_multi(
+            "python",
             "Python",
             ".tox",
             &["pyproject.toml", "setup.py", "requirements.txt"],
@@ -96,6 +113,7 @@ pub fn all_rules() -> Vec<MatchableRule> {
         // Python egg-info (suffix match)
         MatchableRule {
             rule: ArtifactRule {
+                id: "python",
                 build_system: "Python",
                 artifact_dir: "*.egg-info",
                 marker: MarkerKind::Files(&["pyproject.toml", "setup.py", "requirements.txt"]),
@@ -104,21 +122,24 @@ pub fn all_rules() -> Vec<MatchableRule> {
         },
         // Android/Gradle
         mr_multi(
+            "gradle",
             "Android/Gradle",
             "build",
             &["build.gradle", "build.gradle.kts"],
         ),
         mr_multi(
+            "gradle",
             "Android/Gradle",
             ".gradle",
             &["build.gradle", "build.gradle.kts"],
         ),
         // C/C++/CMake
-        mr("C/C++/CMake", "build", &["CMakeLists.txt"]),
-        mr("C/C++/CMake", "CMakeFiles", &["CMakeLists.txt"]),
+        mr("cmake", "C/C++/CMake", "build", &["CMakeLists.txt"]),
+        mr("cmake", "C/C++/CMake", "CMakeFiles", &["CMakeLists.txt"]),
         // .NET/C#
         MatchableRule {
             rule: ArtifactRule {
+                id: "dotnet",
                 build_system: ".NET/C#",
                 artifact_dir: "bin",
                 marker: MarkerKind::GlobSuffix(".csproj"),
@@ -127,6 +148,7 @@ pub fn all_rules() -> Vec<MatchableRule> {
         },
         MatchableRule {
             rule: ArtifactRule {
+                id: "dotnet",
                 build_system: ".NET/C#",
                 artifact_dir: "obj",
                 marker: MarkerKind::GlobSuffix(".csproj"),
@@ -136,6 +158,7 @@ pub fn all_rules() -> Vec<MatchableRule> {
         // .NET/C# -- .sln marker
         MatchableRule {
             rule: ArtifactRule {
+                id: "dotnet",
                 build_system: ".NET/C#",
                 artifact_dir: "bin",
                 marker: MarkerKind::GlobSuffix(".sln"),
@@ -144,6 +167,7 @@ pub fn all_rules() -> Vec<MatchableRule> {
         },
         MatchableRule {
             rule: ArtifactRule {
+                id: "dotnet",
                 build_system: ".NET/C#",
                 artifact_dir: "obj",
                 marker: MarkerKind::GlobSuffix(".sln"),
@@ -151,13 +175,14 @@ pub fn all_rules() -> Vec<MatchableRule> {
             dir_match: DirMatch::Exact("obj"),
         },
         // Elixir/Mix
-        mr("Elixir/Mix", "_build", &["mix.exs"]),
-        mr("Elixir/Mix", "deps", &["mix.exs"]),
+        mr("mix", "Elixir/Mix", "_build", &["mix.exs"]),
+        mr("mix", "Elixir/Mix", "deps", &["mix.exs"]),
         // Haskell/Stack
-        mr("Haskell/Stack", ".stack-work", &["stack.yaml"]),
+        mr("stack", "Haskell/Stack", ".stack-work", &["stack.yaml"]),
         // Haskell/Cabal
         MatchableRule {
             rule: ArtifactRule {
+                id: "cabal",
                 build_system: "Haskell/Cabal",
                 artifact_dir: "dist-newstyle",
                 marker: MarkerKind::GlobSuffix(".cabal"),
@@ -165,29 +190,91 @@ pub fn all_rules() -> Vec<MatchableRule> {
             dir_match: DirMatch::Exact("dist-newstyle"),
         },
         // Dart/Flutter
-        mr("Dart/Flutter", ".dart_tool", &["pubspec.yaml"]),
-        mr("Dart/Flutter", "build", &["pubspec.yaml"]),
+        mr("flutter", "Dart/Flutter", ".dart_tool", &["pubspec.yaml"]),
+        mr("flutter", "Dart/Flutter", "build", &["pubspec.yaml"]),
         // Zig
-        mr("Zig", "zig-out", &["build.zig"]),
-        mr("Zig", "zig-cache", &["build.zig"]),
+        mr("zig", "Zig", "zig-out", &["build.zig"]),
+        mr("zig", "Zig", "zig-cache", &["build.zig"]),
         // PHP/Composer
-        mr("PHP/Composer", "vendor", &["composer.json"]),
+        mr("composer", "PHP/Composer", "vendor", &["composer.json"]),
         // CocoaPods
-        mr("CocoaPods", "Pods", &["Podfile"]),
+        mr("cocoapods", "CocoaPods", "Pods", &["Podfile"]),
         // Ruby/Bundler -- special: matches `bundle` inside a `vendor/` directory.
         // The scanner checks the grandparent for `Gemfile`.
-        mr("Ruby/Bundler", "bundle", &["Gemfile"]),
+        mr("bundler", "Ruby/Bundler", "bundle", &["Gemfile"]),
     ]
+}
+
+/// Returns sorted, deduplicated `(id, display_name)` pairs for all build systems.
+pub fn system_ids() -> Vec<(&'static str, &'static str)> {
+    let mut seen = BTreeSet::new();
+    let mut result = Vec::new();
+    for r in all_rules() {
+        if seen.insert(r.rule.id) {
+            result.push((r.rule.id, r.rule.build_system));
+        }
+    }
+    result.sort_by_key(|(id, _)| *id);
+    result
+}
+
+/// Filter rules by system ID include/exclude lists.
+///
+/// When both slices are empty, returns all rules unchanged.
+/// IDs are matched case-insensitively.
+pub fn filter_rules_by_system(
+    rules: Vec<MatchableRule>,
+    include: &[String],
+    exclude: &[String],
+) -> Result<Vec<MatchableRule>, SystemFilterError> {
+    if include.is_empty() && exclude.is_empty() {
+        return Ok(rules);
+    }
+
+    let valid_ids: BTreeSet<&str> = rules.iter().map(|r| r.rule.id).collect();
+
+    // Validate and normalize IDs
+    let normalize = |ids: &[String]| -> Result<Vec<String>, SystemFilterError> {
+        ids.iter()
+            .map(|id| {
+                let lower = id.to_ascii_lowercase();
+                if valid_ids.contains(lower.as_str()) {
+                    Ok(lower)
+                } else {
+                    Err(SystemFilterError {
+                        id: id.clone(),
+                        valid: valid_ids.iter().copied().collect::<Vec<_>>().join(", "),
+                    })
+                }
+            })
+            .collect()
+    };
+
+    if !include.is_empty() {
+        let normalized = normalize(include)?;
+        Ok(rules
+            .into_iter()
+            .filter(|r| normalized.iter().any(|id| id == r.rule.id))
+            .collect())
+    } else {
+        let normalized = normalize(exclude)?;
+        Ok(rules
+            .into_iter()
+            .filter(|r| !normalized.iter().any(|id| id == r.rule.id))
+            .collect())
+    }
 }
 
 /// Shorthand for an exact-match rule with a single-file marker set.
 fn mr(
+    id: &'static str,
     build_system: &'static str,
     artifact_dir: &'static str,
     markers: &'static [&'static str],
 ) -> MatchableRule {
     MatchableRule {
         rule: ArtifactRule {
+            id,
             build_system,
             artifact_dir,
             marker: MarkerKind::Files(markers),
@@ -198,11 +285,12 @@ fn mr(
 
 /// Shorthand for an exact-match rule with multiple marker files.
 fn mr_multi(
+    id: &'static str,
     build_system: &'static str,
     artifact_dir: &'static str,
     markers: &'static [&'static str],
 ) -> MatchableRule {
-    mr(build_system, artifact_dir, markers)
+    mr(id, build_system, artifact_dir, markers)
 }
 
 /// Check if a parent directory contains any file matching the given marker.
@@ -235,6 +323,7 @@ pub fn matches_dir(dir_name: &str, dir_match: &DirMatch) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashSet;
     use std::fs;
     use tempfile::TempDir;
 
@@ -243,9 +332,122 @@ mod tests {
         let rules = all_rules();
         assert!(!rules.is_empty());
         for r in &rules {
+            assert!(!r.rule.id.is_empty());
             assert!(!r.rule.build_system.is_empty());
             assert!(!r.rule.artifact_dir.is_empty());
         }
+    }
+
+    #[test]
+    fn all_ids_are_lowercase() {
+        for r in all_rules() {
+            assert_eq!(
+                r.rule.id,
+                r.rule.id.to_ascii_lowercase(),
+                "ID '{}' is not lowercase",
+                r.rule.id
+            );
+        }
+    }
+
+    #[test]
+    fn system_ids_are_unique() {
+        let ids = system_ids();
+        let unique: HashSet<&str> = ids.iter().map(|(id, _)| *id).collect();
+        assert_eq!(ids.len(), unique.len(), "duplicate system IDs found");
+    }
+
+    #[test]
+    fn system_ids_sorted() {
+        let ids = system_ids();
+        let sorted: Vec<_> = {
+            let mut v = ids.clone();
+            v.sort_by_key(|(id, _)| *id);
+            v
+        };
+        assert_eq!(ids, sorted);
+    }
+
+    #[test]
+    fn system_ids_covers_all_systems() {
+        let ids = system_ids();
+        let expected = [
+            "bundler", "cabal", "cargo", "cmake", "cocoapods", "composer", "dotnet", "flutter",
+            "gradle", "maven", "mix", "node", "python", "sbt", "spm", "stack", "zig",
+        ];
+        let actual: Vec<&str> = ids.iter().map(|(id, _)| *id).collect();
+        for id in &expected {
+            assert!(actual.contains(id), "Missing system ID: {id}");
+        }
+        assert_eq!(actual.len(), expected.len());
+    }
+
+    #[test]
+    fn filter_include_keeps_matching() {
+        let rules = all_rules();
+        let filtered =
+            filter_rules_by_system(rules, &["cargo".to_string()], &[]).unwrap();
+        assert!(!filtered.is_empty());
+        for r in &filtered {
+            assert_eq!(r.rule.id, "cargo");
+        }
+    }
+
+    #[test]
+    fn filter_exclude_removes_matching() {
+        let rules = all_rules();
+        let total = rules.len();
+        let filtered =
+            filter_rules_by_system(rules, &[], &["python".to_string()]).unwrap();
+        assert!(filtered.len() < total);
+        for r in &filtered {
+            assert_ne!(r.rule.id, "python");
+        }
+    }
+
+    #[test]
+    fn filter_empty_returns_all() {
+        let rules = all_rules();
+        let total = rules.len();
+        let filtered = filter_rules_by_system(rules, &[], &[]).unwrap();
+        assert_eq!(filtered.len(), total);
+    }
+
+    #[test]
+    fn filter_unknown_id_errors() {
+        let rules = all_rules();
+        let result =
+            filter_rules_by_system(rules, &["nonexistent".to_string()], &[]);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("nonexistent"));
+        assert!(err.to_string().contains("cargo"));
+    }
+
+    #[test]
+    fn filter_case_insensitive() {
+        let rules = all_rules();
+        let filtered =
+            filter_rules_by_system(rules, &["CARGO".to_string()], &[]).unwrap();
+        assert!(!filtered.is_empty());
+        for r in &filtered {
+            assert_eq!(r.rule.id, "cargo");
+        }
+    }
+
+    #[test]
+    fn filter_multiple_include() {
+        let rules = all_rules();
+        let filtered = filter_rules_by_system(
+            rules,
+            &["cargo".to_string(), "node".to_string()],
+            &[],
+        )
+        .unwrap();
+        let ids: HashSet<&str> = filtered.iter().map(|r| r.rule.id).collect();
+        assert_eq!(ids.len(), 2);
+        assert!(ids.contains("cargo"));
+        assert!(ids.contains("node"));
     }
 
     #[test]
