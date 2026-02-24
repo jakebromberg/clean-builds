@@ -17,6 +17,15 @@ fn set_up_rust_project(tmp: &TempDir) {
     fs::write(target.join("debug").join("app"), "binary data").unwrap();
 }
 
+fn set_up_python_project(tmp: &TempDir) {
+    let project = tmp.path().join("my-python-app");
+    fs::create_dir_all(&project).unwrap();
+    fs::write(project.join("pyproject.toml"), "").unwrap();
+    let pycache = project.join("__pycache__");
+    fs::create_dir_all(&pycache).unwrap();
+    fs::write(pycache.join("module.pyc"), "bytecode").unwrap();
+}
+
 fn set_up_node_project(tmp: &TempDir) {
     let project = tmp.path().join("my-node-app");
     fs::create_dir_all(&project).unwrap();
@@ -292,4 +301,143 @@ fn default_does_not_show_debug_log() {
         .assert()
         .success()
         .stderr(predicate::str::contains("Found artifact").not());
+}
+
+// -- System filter integration tests --
+
+#[test]
+fn system_filters_to_one_system() {
+    let tmp = TempDir::new().unwrap();
+    set_up_rust_project(&tmp);
+    set_up_node_project(&tmp);
+
+    cmd()
+        .arg(tmp.path())
+        .arg("--system")
+        .arg("cargo")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Rust/Cargo"))
+        .stdout(predicate::str::contains("Node.js").not());
+}
+
+#[test]
+fn system_multiple() {
+    let tmp = TempDir::new().unwrap();
+    set_up_rust_project(&tmp);
+    set_up_node_project(&tmp);
+    set_up_python_project(&tmp);
+
+    cmd()
+        .arg(tmp.path())
+        .arg("--system")
+        .arg("cargo")
+        .arg("--system")
+        .arg("node")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Rust/Cargo"))
+        .stdout(predicate::str::contains("Node.js"))
+        .stdout(predicate::str::contains("Python").not());
+}
+
+#[test]
+fn exclude_system() {
+    let tmp = TempDir::new().unwrap();
+    set_up_rust_project(&tmp);
+    set_up_node_project(&tmp);
+
+    cmd()
+        .arg(tmp.path())
+        .arg("--exclude-system")
+        .arg("node")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Rust/Cargo"))
+        .stdout(predicate::str::contains("Node.js").not());
+}
+
+#[test]
+fn invalid_system_errors() {
+    let tmp = TempDir::new().unwrap();
+
+    cmd()
+        .arg(tmp.path())
+        .arg("--system")
+        .arg("nonexistent")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("unknown build system"));
+}
+
+#[test]
+fn system_and_exclude_system_conflict() {
+    cmd()
+        .arg("--system")
+        .arg("cargo")
+        .arg("--exclude-system")
+        .arg("node")
+        .assert()
+        .failure();
+}
+
+#[test]
+fn list_systems_shows_table() {
+    cmd()
+        .arg("--list-systems")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("cargo"))
+        .stdout(predicate::str::contains("node"))
+        .stdout(predicate::str::contains("python"))
+        .stdout(predicate::str::contains("Rust/Cargo"))
+        .stdout(predicate::str::contains("ID"));
+}
+
+#[test]
+fn list_systems_works_without_path() {
+    // --list-systems should work even without a valid path argument
+    cmd()
+        .arg("--list-systems")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("cargo"));
+}
+
+#[test]
+fn system_combined_with_glob() {
+    let tmp = TempDir::new().unwrap();
+    set_up_node_project(&tmp);
+
+    cmd()
+        .arg(tmp.path())
+        .arg("--system")
+        .arg("node")
+        .arg("--exclude")
+        .arg("my-node*")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("No build artifacts found."));
+}
+
+#[test]
+fn delete_with_system_filter() {
+    let tmp = TempDir::new().unwrap();
+    set_up_rust_project(&tmp);
+    set_up_node_project(&tmp);
+
+    cmd()
+        .arg(tmp.path())
+        .arg("--system")
+        .arg("node")
+        .arg("--delete")
+        .arg("--yes")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Deleted 1 of 1"));
+
+    // node_modules should be deleted
+    assert!(!tmp.path().join("my-node-app").join("node_modules").exists());
+    // Rust target should still exist
+    assert!(tmp.path().join("my-rust-app").join("target").exists());
 }

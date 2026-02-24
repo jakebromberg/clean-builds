@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 use jwalk::WalkDir;
 use log::{debug, warn};
 
-use crate::rules::{MatchableRule, all_rules, has_marker, matches_dir};
+use crate::rules::{MatchableRule, has_marker, matches_dir};
 
 /// A detected build artifact.
 #[derive(Debug, Clone)]
@@ -20,8 +20,11 @@ pub struct Artifact {
 ///
 /// Uses jwalk's `process_read_dir` callback to match artifacts inline during
 /// traversal and prune matched directories so their children are never visited.
-pub fn scan(root: &Path) -> Vec<Artifact> {
-    let rules = all_rules();
+///
+/// The caller provides the set of rules to match against, allowing pre-filtering
+/// by build system before any filesystem work is done.
+pub fn scan(root: &Path, rules: &[MatchableRule]) -> Vec<Artifact> {
+    let rules = rules.to_vec();
     let artifacts = Arc::new(Mutex::new(Vec::new()));
     let artifacts_ref = Arc::clone(&artifacts);
 
@@ -122,6 +125,7 @@ fn try_match(path: &Path, dir_name: &str, rules: &[MatchableRule]) -> Option<Art
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::rules::all_rules;
     use std::collections::HashSet;
     use std::fs;
     use tempfile::TempDir;
@@ -141,7 +145,7 @@ mod tests {
     fn detects_rust_target() {
         let tmp = TempDir::new().unwrap();
         set_up_project(&tmp, "Cargo.toml", "target");
-        let artifacts = scan(tmp.path());
+        let artifacts = scan(tmp.path(), &all_rules());
         assert_eq!(artifacts.len(), 1);
         assert_eq!(artifacts[0].build_system, "Rust/Cargo");
         assert_eq!(artifacts[0].artifact_dir, "target");
@@ -151,7 +155,7 @@ mod tests {
     fn detects_node_modules() {
         let tmp = TempDir::new().unwrap();
         set_up_project(&tmp, "package.json", "node_modules");
-        let artifacts = scan(tmp.path());
+        let artifacts = scan(tmp.path(), &all_rules());
         assert_eq!(artifacts.len(), 1);
         assert_eq!(artifacts[0].build_system, "Node.js");
     }
@@ -160,7 +164,7 @@ mod tests {
     fn detects_maven_target() {
         let tmp = TempDir::new().unwrap();
         set_up_project(&tmp, "pom.xml", "target");
-        let artifacts = scan(tmp.path());
+        let artifacts = scan(tmp.path(), &all_rules());
         assert_eq!(artifacts.len(), 1);
         assert_eq!(artifacts[0].build_system, "Java/Maven");
     }
@@ -171,7 +175,7 @@ mod tests {
         let pycache = tmp.path().join("some_dir").join("__pycache__");
         fs::create_dir_all(&pycache).unwrap();
         fs::write(pycache.join("module.pyc"), "").unwrap();
-        let artifacts = scan(tmp.path());
+        let artifacts = scan(tmp.path(), &all_rules());
         assert_eq!(artifacts.len(), 1);
         assert_eq!(artifacts[0].build_system, "Python");
         assert_eq!(artifacts[0].artifact_dir, "__pycache__");
@@ -184,7 +188,7 @@ mod tests {
         fs::create_dir_all(&project).unwrap();
         fs::write(project.join("pyproject.toml"), "").unwrap();
         fs::create_dir_all(project.join(".venv")).unwrap();
-        let artifacts = scan(tmp.path());
+        let artifacts = scan(tmp.path(), &all_rules());
         assert_eq!(artifacts.len(), 1);
         assert_eq!(artifacts[0].build_system, "Python");
         assert_eq!(artifacts[0].artifact_dir, ".venv");
@@ -195,7 +199,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let project = tmp.path().join("random");
         fs::create_dir_all(project.join(".venv")).unwrap();
-        let artifacts = scan(tmp.path());
+        let artifacts = scan(tmp.path(), &all_rules());
         assert!(artifacts.is_empty());
     }
 
@@ -203,7 +207,7 @@ mod tests {
     fn detects_gradle_build() {
         let tmp = TempDir::new().unwrap();
         set_up_project(&tmp, "build.gradle", "build");
-        let artifacts = scan(tmp.path());
+        let artifacts = scan(tmp.path(), &all_rules());
         assert_eq!(artifacts.len(), 1);
         assert_eq!(artifacts[0].build_system, "Android/Gradle");
     }
@@ -212,7 +216,7 @@ mod tests {
     fn detects_cmake_build() {
         let tmp = TempDir::new().unwrap();
         set_up_project(&tmp, "CMakeLists.txt", "build");
-        let artifacts = scan(tmp.path());
+        let artifacts = scan(tmp.path(), &all_rules());
         assert_eq!(artifacts.len(), 1);
         assert_eq!(artifacts[0].build_system, "C/C++/CMake");
     }
@@ -225,7 +229,7 @@ mod tests {
         fs::write(project.join("MyApp.csproj"), "").unwrap();
         fs::create_dir_all(project.join("bin")).unwrap();
         fs::create_dir_all(project.join("obj")).unwrap();
-        let artifacts = scan(tmp.path());
+        let artifacts = scan(tmp.path(), &all_rules());
         assert_eq!(artifacts.len(), 2);
         let systems: Vec<&str> = artifacts.iter().map(|a| a.build_system).collect();
         assert!(systems.iter().all(|s| *s == ".NET/C#"));
@@ -238,7 +242,7 @@ mod tests {
         fs::create_dir_all(&project).unwrap();
         fs::write(project.join("setup.py"), "").unwrap();
         fs::create_dir_all(project.join("mylib.egg-info")).unwrap();
-        let artifacts = scan(tmp.path());
+        let artifacts = scan(tmp.path(), &all_rules());
         assert_eq!(artifacts.len(), 1);
         assert_eq!(artifacts[0].build_system, "Python");
     }
@@ -248,7 +252,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let git = tmp.path().join(".git");
         fs::create_dir_all(&git).unwrap();
-        let artifacts = scan(tmp.path());
+        let artifacts = scan(tmp.path(), &all_rules());
         assert!(artifacts.is_empty());
     }
 
@@ -258,7 +262,7 @@ mod tests {
         // build/ without any marker files should not match
         let project = tmp.path().join("generic");
         fs::create_dir_all(project.join("build")).unwrap();
-        let artifacts = scan(tmp.path());
+        let artifacts = scan(tmp.path(), &all_rules());
         assert!(artifacts.is_empty());
     }
 
@@ -277,7 +281,7 @@ mod tests {
         fs::write(nested.join("package.json"), "").unwrap();
         fs::create_dir_all(nested.join("node_modules")).unwrap();
 
-        let artifacts = scan(tmp.path());
+        let artifacts = scan(tmp.path(), &all_rules());
         // Should only detect the outer node_modules, not the nested one
         assert_eq!(artifacts.len(), 1);
         assert_eq!(artifacts[0].path, nm);
@@ -299,7 +303,7 @@ mod tests {
         fs::write(node_proj.join("package.json"), "").unwrap();
         fs::create_dir_all(node_proj.join("node_modules")).unwrap();
 
-        let artifacts = scan(tmp.path());
+        let artifacts = scan(tmp.path(), &all_rules());
         assert_eq!(artifacts.len(), 2);
         let systems: HashSet<&str> = artifacts.iter().map(|a| a.build_system).collect();
         assert!(systems.contains("Rust/Cargo"));
@@ -313,7 +317,7 @@ mod tests {
         fs::create_dir_all(&project).unwrap();
         fs::write(project.join("Gemfile"), "").unwrap();
         fs::create_dir_all(project.join("vendor").join("bundle")).unwrap();
-        let artifacts = scan(tmp.path());
+        let artifacts = scan(tmp.path(), &all_rules());
         assert_eq!(artifacts.len(), 1);
         assert_eq!(artifacts[0].build_system, "Ruby/Bundler");
     }
@@ -326,7 +330,7 @@ mod tests {
         fs::write(project.join("Gemfile"), "").unwrap();
         // Just vendor/ without bundle/ inside
         fs::create_dir_all(project.join("vendor")).unwrap();
-        let artifacts = scan(tmp.path());
+        let artifacts = scan(tmp.path(), &all_rules());
         assert!(artifacts.is_empty());
     }
 
@@ -334,7 +338,7 @@ mod tests {
     fn detects_swift_spm_build() {
         let tmp = TempDir::new().unwrap();
         set_up_project(&tmp, "Package.swift", ".build");
-        let artifacts = scan(tmp.path());
+        let artifacts = scan(tmp.path(), &all_rules());
         assert_eq!(artifacts.len(), 1);
         assert_eq!(artifacts[0].build_system, "Swift/SPM");
     }
@@ -347,7 +351,7 @@ mod tests {
         fs::write(project.join("mix.exs"), "").unwrap();
         fs::create_dir_all(project.join("_build")).unwrap();
         fs::create_dir_all(project.join("deps")).unwrap();
-        let artifacts = scan(tmp.path());
+        let artifacts = scan(tmp.path(), &all_rules());
         assert_eq!(artifacts.len(), 2);
         assert!(artifacts.iter().all(|a| a.build_system == "Elixir/Mix"));
     }
@@ -356,7 +360,7 @@ mod tests {
     fn detects_cocoapods() {
         let tmp = TempDir::new().unwrap();
         set_up_project(&tmp, "Podfile", "Pods");
-        let artifacts = scan(tmp.path());
+        let artifacts = scan(tmp.path(), &all_rules());
         assert_eq!(artifacts.len(), 1);
         assert_eq!(artifacts[0].build_system, "CocoaPods");
     }

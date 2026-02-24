@@ -109,6 +109,30 @@ pub fn print_summary(
     Ok(())
 }
 
+/// Print the table of available build system IDs.
+pub fn print_systems(out: &mut dyn Write) -> std::io::Result<()> {
+    let systems = crate::rules::system_ids();
+    let id_width = systems.iter().map(|(id, _)| id.len()).max().unwrap_or(2).max(2);
+    let name_width = systems
+        .iter()
+        .map(|(_, name)| name.len())
+        .max()
+        .unwrap_or(12)
+        .max(12);
+
+    writeln!(out, "{:<id_width$}  {:<name_width$}", "ID", "Build System")?;
+    writeln!(
+        out,
+        "{:<id_width$}  {:<name_width$}",
+        "-".repeat(id_width),
+        "-".repeat(name_width)
+    )?;
+    for (id, name) in &systems {
+        writeln!(out, "{:<id_width$}  {:<name_width$}", id, name)?;
+    }
+    Ok(())
+}
+
 /// Print the dry-run footer message.
 pub fn print_dry_run_footer(out: &mut dyn Write) -> std::io::Result<()> {
     writeln!(out)?;
@@ -179,5 +203,20 @@ mod tests {
         print_dry_run_footer(&mut buf).unwrap();
         let output = String::from_utf8(buf).unwrap();
         assert!(output.contains("Run with --delete"));
+    }
+
+    #[test]
+    fn print_systems_shows_ids() {
+        let mut buf = Vec::new();
+        print_systems(&mut buf).unwrap();
+        let output = String::from_utf8(buf).unwrap();
+        assert!(output.contains("ID"));
+        assert!(output.contains("Build System"));
+        assert!(output.contains("cargo"));
+        assert!(output.contains("Rust/Cargo"));
+        assert!(output.contains("node"));
+        assert!(output.contains("Node.js"));
+        assert!(output.contains("python"));
+        assert!(output.contains("Python"));
     }
 }
