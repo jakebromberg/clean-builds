@@ -63,6 +63,15 @@ pub fn all_rules() -> Vec<MatchableRule> {
         mr("node", "Node.js", ".output", &["package.json"]),
         // Swift/SPM
         mr("spm", "Swift/SPM", ".build", &["Package.swift"]),
+        // Xcode -- `Build` is only an artifact dir when xcodebuild was pointed at it
+        // (-derivedDataPath / SYMROOT), so both names stay marker-gated. `project.yml`
+        // covers XcodeGen projects, where the .xcodeproj is generated and gitignored.
+        mr_glob("xcode", "Xcode", "DerivedData", ".xcodeproj"),
+        mr_glob("xcode", "Xcode", "DerivedData", ".xcworkspace"),
+        mr("xcode", "Xcode", "DerivedData", &["project.yml"]),
+        mr_glob("xcode", "Xcode", "Build", ".xcodeproj"),
+        mr_glob("xcode", "Xcode", "Build", ".xcworkspace"),
+        mr("xcode", "Xcode", "Build", &["project.yml"]),
         // Python -- no-marker variants
         MatchableRule {
             rule: ArtifactRule {
@@ -283,6 +292,25 @@ fn mr(
     }
 }
 
+/// Shorthand for an exact-match rule whose marker is any file or directory in the
+/// parent whose name ends with `suffix` (e.g., `.xcodeproj`).
+fn mr_glob(
+    id: &'static str,
+    build_system: &'static str,
+    artifact_dir: &'static str,
+    suffix: &'static str,
+) -> MatchableRule {
+    MatchableRule {
+        rule: ArtifactRule {
+            id,
+            build_system,
+            artifact_dir,
+            marker: MarkerKind::GlobSuffix(suffix),
+        },
+        dir_match: DirMatch::Exact(artifact_dir),
+    }
+}
+
 /// Shorthand for an exact-match rule with multiple marker files.
 fn mr_multi(
     id: &'static str,
@@ -388,6 +416,7 @@ mod tests {
             "sbt",
             "spm",
             "stack",
+            "xcode",
             "zig",
         ];
         let actual: Vec<&str> = ids.iter().map(|(id, _)| *id).collect();

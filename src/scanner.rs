@@ -364,4 +364,71 @@ mod tests {
         assert_eq!(artifacts.len(), 1);
         assert_eq!(artifacts[0].build_system, "CocoaPods");
     }
+
+    #[test]
+    fn detects_xcode_derived_data() {
+        let tmp = TempDir::new().unwrap();
+        let project = tmp.path().join("MyApp");
+        fs::create_dir_all(project.join("MyApp.xcodeproj")).unwrap();
+        fs::create_dir_all(project.join("DerivedData")).unwrap();
+        let artifacts = scan(tmp.path(), &all_rules());
+        assert_eq!(artifacts.len(), 1);
+        assert_eq!(artifacts[0].build_system, "Xcode");
+        assert_eq!(artifacts[0].artifact_dir, "DerivedData");
+    }
+
+    #[test]
+    fn detects_xcode_build_output_with_workspace_marker() {
+        let tmp = TempDir::new().unwrap();
+        let project = tmp.path().join("MyApp");
+        fs::create_dir_all(project.join("MyApp.xcworkspace")).unwrap();
+        fs::create_dir_all(project.join("Build")).unwrap();
+        let artifacts = scan(tmp.path(), &all_rules());
+        assert_eq!(artifacts.len(), 1);
+        assert_eq!(artifacts[0].build_system, "Xcode");
+        assert_eq!(artifacts[0].artifact_dir, "Build");
+    }
+
+    #[test]
+    fn detects_xcode_with_xcodegen_marker() {
+        // XcodeGen projects generate (and gitignore) the .xcodeproj, so project.yml
+        // is the only marker left in a clean checkout.
+        let tmp = TempDir::new().unwrap();
+        let project = tmp.path().join("MyApp");
+        fs::create_dir_all(&project).unwrap();
+        fs::write(project.join("project.yml"), "").unwrap();
+        fs::create_dir_all(project.join("DerivedData")).unwrap();
+        let artifacts = scan(tmp.path(), &all_rules());
+        assert_eq!(artifacts.len(), 1);
+        assert_eq!(artifacts[0].build_system, "Xcode");
+    }
+
+    #[test]
+    fn ignores_derived_data_without_marker() {
+        // Orphaned build output with no Xcode project beside it stays untouched.
+        let tmp = TempDir::new().unwrap();
+        fs::create_dir_all(tmp.path().join("leftover").join("DerivedData")).unwrap();
+        let artifacts = scan(tmp.path(), &all_rules());
+        assert!(artifacts.is_empty());
+    }
+
+    #[test]
+    fn prunes_package_checkouts_inside_derived_data() {
+        // DerivedData holds SPM checkouts that each look like their own project;
+        // only the enclosing DerivedData should be reported.
+        let tmp = TempDir::new().unwrap();
+        let project = tmp.path().join("MyApp");
+        fs::create_dir_all(project.join("MyApp.xcodeproj")).unwrap();
+        let derived = project.join("DerivedData");
+        let checkout = derived
+            .join("SourcePackages")
+            .join("checkouts")
+            .join("some-pkg");
+        fs::create_dir_all(&checkout).unwrap();
+        fs::write(checkout.join("Package.swift"), "").unwrap();
+        fs::create_dir_all(checkout.join(".build")).unwrap();
+        let artifacts = scan(tmp.path(), &all_rules());
+        assert_eq!(artifacts.len(), 1);
+        assert_eq!(artifacts[0].path, derived);
+    }
 }

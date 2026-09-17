@@ -161,4 +161,5 @@ Each artifact directory is only matched when a marker file exists in its parent 
 | `sbt` | Scala/SBT | `target/` | `build.sbt` |
 | `spm` | Swift/SPM | `.build/` | `Package.swift` |
 | `stack` | Haskell/Stack | `.stack-work/` | `stack.yaml` |
+| `xcode` | Xcode | `DerivedData/`, `Build/` | `*.xcodeproj` or `*.xcworkspace` or `project.yml` |
 | `zig` | Zig | `zig-out/`, `zig-cache/` | `build.zig` |
